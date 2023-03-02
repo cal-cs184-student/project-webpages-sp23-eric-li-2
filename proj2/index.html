@@ -150,7 +150,19 @@
 
 		<h1> Part 6: Loop Subdivision </h1>
 		<p> 
-			The behavior of the meshes is that they tend to round off corners and edges but not entirely. 
+			I implemented the loop subdivision following the advice of the provided code and the comment in it. 
+			I used the flip and split operations implemented in the previous parts to implement the subdivision.
+			I first calculated the new posiitons of the original vertices and stored them in the original vertices newPosition member.
+			Then I calculated and stored the positions of the new midpoint vertices in the edges. 
+			Then I actually performed the subdivision which involved spltting every original edge in any order and then flipping any edges 
+			that did not lie along an original edge and connected a new vertex to an old vertex. 
+			Then I updated all the positions to newPosition. 
+			One implementation detail is that I needed to keep track of which edge actulaly stored the newPosition for the midpoints.
+			To keep things simple I just copied newPosition to the two edges that the midpoint lied between so that later down the line, 
+			I could grab newPosiiton from either edge.
+		</p>
+		<p> 
+			The behavior of the subdivision of meshes is that they tend to round off corners and edges but not entirely. 
 			Here are some screenshots of a cube being rounded off by the subdivision process.
 		</p>
 		<table>
