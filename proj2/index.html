@@ -1,7 +1,192 @@
 <html>
 	<head>
+		<style>
+			img {
+				width: 70%;
+				height: 70%;
+			}
+		</style>
 	</head>
 	<body>
-		Project 2 here
+
+		<h1> Project 2 Overview </h1>
+		<p>
+			In this project I implemented 1d Bezier curves in 2 dimensions using Casteljau's algorithm.
+			Casteljau's algorithm is a technique of using successive LERPs to evaluate the location of a point on the curve. 
+			Then I implemented 2d Bezier surfaces also using Casteljau's algorithm.
+			Additionally, I implemented an area weighted vertex normal calculator which could be used for Blinn phong lighting calculations. 
+			This was done efficiently using the halfedge datastructure.
+
+			Finally, I implemented loop division to define surfaces in terms of control points. 
+			The loop division algorithm subdivides the mesh and converges on a final mesh. 
+			It tends to make edges and vertices smoother after each subdivision.
+			So it is possible to start from a very coarse mesh like a cube and end up with something roughly spherical.
+		</p>
+		<h1> Part 1 Bezier curves</h1>
+		<p>
+			Casteljau's algorithm is a technique to evaluate the location of a point on a bezier curve given a number t from the range [0,1]. 
+			t = 0 represents the start of the curve and t=1 represents the end.
+			Casteljau's provides an implicit parametrization of the curve in terms of t ranging from [0,1] and provides the means to compute 
+			the location of the point with successive lerp operations between the control points.
+			Starting from n control points, n-1 control points are then generated with a lerp using p_i' = (1-t)*p_i + t*p_i 
+			this is done recursively until only 1 control point remains which represents the point on the bezier curve.
+			My implementation uses a std::vector of Vector2D control points. I then perform the lerp operation to generate 
+			a vector 1 shorter than before. I do this till their is one element left.
+		</p>
+		<p> 
+			Here is an example of a Bezier curve with 6 control points. Images are ordered left to right, then top to bottom <br>
+			
+			
+			<table>
+				<tr>
+					<th> <img src="img\task1_1.png" alt="task1_1.png""> </th>
+					<th> <img src="img\task1_2.png" alt="task1_2.png""> </th>
+				</tr>
+				<tr>
+					<th> <img src="img\task1_3.png" alt="task1_4.png"">  </th>
+					<th> <img src="img\task1_4.png" alt="task1_5.png""> </th>
+				</tr>
+				<tr>
+					<th> <img src="img\task1_5.png" alt="task1_4.png"">  </th>
+					<th> <img src="img\task1_6.png" alt="task1_5.png""> </th>
+				</tr>
+			</table>
+		</p>
+		<p> Here is a slightly shifted bezier curve, it is place side by side with the one above for comparison </p>
+		<table>
+			<tr>
+				<th> <img src="img\task1_7.png" alt="task1_7.png""> </th>
+				<th> <img src="img\task1_6.png" alt="task1_6.png""> </th>
+			</tr>
+		</table>
+
+		<h1> Part 2: Bezier Surfaces </h1>
+		<p>
+			Casteljau's algorithm can be extended to surfaces by using a 2d grid of control points and a parameter (u,v) where u,v in [0,1]. 
+			Casteljau's is first run normally on each row of the control points with parameter t = u to generate a single control point for each row.
+			Then using the control points we got for each row, we run Casteljau's again with t = v.
+			This gives us the final point that lies on the bezier surface.
+			This is exactly what my code does. I run casteljau on each row, place these new control points in a new vector. Then run casteljau again.
+		</p>
+		<p> Here is a screensot of bez/teapot.bez rendered using my code </p>
+		<img src="img\task2_1.png" alt="task2_1.png">
+
+		<h1> Part 3: Area weighted vertex normals </h1>
+		<p> I implemented area weighted vertex normals using the half edge datastructure. 
+			The area weighted vertex normal is a normal vector calculated based on the normals of the adjacent faces.
+			The normals of the adjacent faces area added together with their weight equal to their surface area. 
+			The normal was calculated using the cross product and the area was also calculated using the cross product. 
+
+			In my implemntation I simply added the cross products of all the adjacent faces then normalized the final vector. 
+			The cross product's magnitude was equal to the surface area of the face which accounted for the weighting.
+
+			The half edge datastructure allowed me to do all of this efficiently by letting me traverse the graph with a datastructure similar to a linked list.
+			Each half edge had a pointer to the next half edge along the face going in a counterclockwise direction. Each halfedge also had a twin which could be used 
+			to come back to the original vertex or to traverse onto an adjacent face.
+
+			With the half edge datastructure i was able to iterate over all the surrounding vertices of a vertex. 
+		</p>
+		<p> Here is a screenshot of dae/teapot.dae without and with the vertex normals </p>
+		<table>
+			<tr>
+				<th> <img src="img\task3_1.png" alt="task3_1.png"> </th>
+				<th> <img src="img\task3_2.png" alt="task3_2.png"> </th>
+			</tr>
+		</table>
+		<p> As you can see the render on the right with the vertex normals has a much smoother lighting compared to the render on the left. 
+			The render on the left only uses flat surface lighting using the normal of a face for the light intesity calculation.
+			The render on te right uses interpolation to calculate the normal of points in the interior of the polygon using a weighted sum of the vertex normals. 
+			I am not sure what interpolation was used in the code we were provided but it is likely barycentric interpolation since it the most simple and provideds decent results.
+			Other interpolation technqiues could be used but I have not tried them.
+		</p>
+		<h1> Part 4: Edge Flip operation </h1>
+		<p> 
+			I implemented the edge flip operation by reassigning the pointers between the existing edges, half_edges, faces, and vertices.
+			No new mesh elements needed to be created since the mesh had the same number of elements before and after flip.
+			Some debugging issues I ran into was my use of the word "auto" and "auto&". Using "auto&" seemed to cause a lot of issues and messed with reassigning member variables of the half edges. 
+			I was not very familiar with references and iterators so I avoided using auto&.
+
+			To help with debugging I made a map that mapped iterators to a name such as "ab" or "bc" and passed it into the check_for function.
+			This helped make the debugging output more legible and I did not need to match memory adresses to figure what each of the half edges were pointing to.
+			This use of map also really helped me pinpoint the absolute chaos caused by using auto&. 
+			A topic I should study in the future is how references to iterators behave and how references of references behave.
+		</p>
+		<p> Here is a screenshot of some edge flip operations being performed on a teapot </p>
+		<table>
+			<tr>
+				<th> <img src="img\task4_1.png" alt="task4_1.png"> </th>
+				<th> <img src="img\task4_2.png" alt="task4_2.png"> </th>
+			</tr>
+		</table>
+		<h1> Part5: Edge split operation </h1>
+		<p> 
+			I implemented the edge split operation similarly to the edge flip operation.
+			The split created 6 new half edges, 3 new edges, 3 new faces, and 1 new vertex. 
+			These were created at the end of the linked list. 
+			I reused the old edges, faces, halfedges, and vertices by simply reassigning what mesh objects they pointed to such their halfedge member variable.
+			I avoided deleting any old variables for efficiency reasons. 
+
+			After creating the new mesh elements, I needed to assign all their member variables to point to the correct elements.
+			This was done systematically with a picture diagram on the left side of my screen and the code on my right. 
+			I assigned the half edges in triplets for each triangle and did this four times for each quadrant of the split triangles. 
+
+			For debugging, I again used the map from halfedges to names which let me read the debug info easily without deciphering memory adresses since 
+			the hashmap deciphered the memory adresses for me.
+
+		</p>
+		<p> 
+			The behavior of the meshes is that they tend to round off corners and edges but not entirely. 
+			Here are some screenshots of a cube being rounded off by the subdivision process.
+		</p>
+		<table>
+			<tr>
+				<th> <img src="img\task6_1.png" alt="task6_1.png"> </th>
+				<th> <img src="img\task6_2.png" alt="task6_2.png"> </th>
+			</tr>
+			<tr>
+				<th> <img src="img\task6_3.png" alt="task6_3.png"> </th>
+				<th> <img src="img\task6_4.png" alt="task6_4.png"> </th>
+			</tr>
+		</table>
+		<p>	
+			This rounding off process can be reduced by pre-splitting 
+			some of the edges along a corner / edge to increase the number of polygons along the edge. This acts like a buffer for the smoothing process 
+			as the smoothing really starts along the corners and slowly spreads into the interior of the shape. Some pictures below show this buffering in action.
+		</p>
+		<p> Cube with single sharp edge</p>
+		<table>
+			<tr>
+				<th> <img src="img\task6_12.png" alt="task6_12.png"> </th>
+				<th> <img src="img\task6_13.png" alt="task6_13.png"> </th>
+			</tr>
+			<tr>
+				<th> <img src="img\task6_14.png" alt="task6_14.png"> </th>
+				<th> <img src="img\task6_15.png" alt="task6_15.png"> </th>
+			</tr>
+			<tr>
+				<th> <img src="img\task6_17.png" alt="task6_17.png"> </th>
+				<th> <img src="img\task6_18.png" alt="task6_18.png"> </th>
+			</tr>
+		</table>
+
+		<p> 
+			Another observation is that the subdivision of the cube is senstiive to the starting mesh topology. 
+			After a couple of subdivisions, the cube ends up assymetric due to how each square face is divded into 2 triangles.
+			There are two possible topologies for each face depending on which diagonal was used. 
+			This can be mitigated with some preprocessing to make the mesh topology symmetrical before subdvision starts.
+			In the exam below, I preprocessed the cube by splitting the diagonal edge on every face so that each face is made of 4 triangls in the shape of an x.
+		</p>
+		<table>
+			<tr>
+				<th> <img src="img\task6_5.png" alt="task6_5.png"> </th>
+				<th> <img src="img\task6_6.png" alt="task6_6.png"> </th>
+			</tr>
+			<tr>
+				<th> <img src="img\task6_7.png" alt="task6_7.png"> </th>
+				<th> <img src="img\task6_8.png" alt="task6_8.png"> </th>
+			</tr>
+
+		</table>
+		<h1> <a href="https://cal-cs184-student.github.io/project-webpages-sp23-eric-li-2/"> Github pages link </a></h1>
 	</body>
 </html>
