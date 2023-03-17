@@ -2,6 +2,280 @@
 	<head>
 	</head>
 	<body>
-		Project 3-1 here
+		<h1> Overview </h1>
+		<p>
+			This project consisted of five parts, each of which presented unique chalenges.
+			Part 1 involved the rendering pipeline and projecting rays from a camera into a scene.
+			This exercised my knowledge on coordinate transforms and intersection tests.
+		</p>
+		<p> Part 2 involved speeding up the earlier ray intersection tests using a Bounding Volume Hiearchy Datastructure.
+			The datastructure is able to avoid a lot of intersection tests with primitives by only checking the bounding boxes of groups of them.
+			The primitives are also grouped into hierarchies of sets such that the intersection region is hopefully halved, each time we perform a bounding box intersection.
+		</p>
+		<p>
+			Part 3 involved implementing a ray tracer using Direct Lighting. 
+			This involved tracing the paths that light could take to reach the camera with 0 or 1 bounces.
+			This involved using the BRDF to calculate the intensity of light reflexted off a surface in a certain direction.
+			I had to exercise my knowledge of radiometry and integrate over hemispheres to find the exit radiance in a certain direction.
+			The integrals were compute with monte-carlo techniques. Two monte-carlo techniques used were uniform and importance sampling.
+		</p>
+		<p> 
+			Part 4 was Global illuminaiton and this involved approximately solving the recursive rendering equation.
+			The solution as covered in lecture was the light received was just the sum of light paths with 0 bounces, 1 bounces,
+			2 bounces, etc... This calculation was performed with russian roulette where the infinite recursion has a chance of terminating 
+			at every timestep with a certain probability. This does not change the expected value of the integral. 
+		</p>
+		<p>
+			Part 5 was speeding up the global illumination calculation by utilizing the faster convergence of some pixels compared to others.
+			In parts of the image where there is great detail or complicated materials, the monte-carlo integration takes longer to converge.
+			Thus, it is wise to sample more from complex areas of the image compared to less complex portions. This involved some statistics 
+			of using confidence intervals like Z-scores to identify when a pixel has converged close enough to its final value.
+		</p>
+		
+		<hr>
+		<h1> Part 1 </h1>
+		<p> 
+			The ray generation involved starting from normalized image coordinates in [0,1]x[0,1], then converting 
+			it to camera coordinates of [-tan(hFov/2),+tan(hFov/2)]x[-tan(vFov/2),+tan(vFov/2)]. 
+			This camera coordinate is associated with a pixel and we used a uniform sampler to generate points within
+			the camera pixel. Then, each of these points is turned into a ray from 0,0,0 to the sample point.
+			These rays are then transformed from camera coordinates to world coordinates by rotating them then shifting it based on the position of the camera. 
+			
+			An important detail 
+			throughout all of this was keeping track of min_t and max_t which intially start out based on the nearClip and farClip planes.
+			Objects outside of the near and far clipping planes should not be rendered. Throughout the code, min_t and max_t were 
+			frequently shifted to speed up calculations such as adding EPS_F to min_t to avoid a self intersection when the ray starts on a plane, or 
+			constantly decreasing max_t to the lowest t found when performing intersection checks to avoid checking objects further away.
+
+			The primitive intersection parts of the pipeline involved triangles and spheres. For triangles, 
+			it was essentially finding the intersection between a plane and a line, then checking if the intersection point was also inside the triangle.
+			I used the Moller Trumbore algorithm to compute this. 
+			For Spheres, this involved solving the system of equations defined by the line and sphere which worked out to solving a quadratic equation.
+			0 solutions meant no intersection, 1 solution means the line is tangent to the sphere, and 2 solutions means the line intersects the sphere. 
+		</p>
+		<p> Here are a few small dae files I rendered </p>
+		<table>
+			<tr>
+				<th> <img src=".\img\part1\CBempty.PNG"></th>
+				<th> <img src=".\img\part1\CBspheres.PNG"></th>
+			</tr>
+			<tr>
+				<th> <img src=".\img\part1\banana.PNG"></th>
+			</tr>
+		</table>
+		<hr>
+		<h1> Part 2 </h1>
+		<p>
+			My BVH construction algorithm was recursively defined.
+			I first start with a set of primitives. I want to split them into two roughly even groups such that their bounding boxes don't overlap. 
+			This will minimize the expected number of ray intersections computed. 
+			A heuristic I used to do this was to split along the median of the longest dimension of the bounding box of all the points.
+			An edge case I needed to handle was if all the points were on one side of the line. To resolve this, I just randomly split the primitives into two even groups.
+			This seemed to work pretty well. Then after splitting the primitives into the two sets,
+			I recursively built another BVH on the left and right sets.
+		</p>
+		<p> Here are some images with normal shading for a few large .dae files that I could only render using BVH accleration </p>
+		<table>
+			<tr>
+				<th> <img src=".\img\part2\cow.PNG"></th>
+				<th> <img src=".\img\part2\maxplanck.PNG"></th>
+			</tr>
+			<tr>
+				<th> <img src=".\img\part2\CBlucy.PNG"></th>
+			</tr>
+		</table>
+		<p> 
+			Comparing the rendering times on a few scenes with moderately complex geometries with and without BVH, we see that BVH accleration greatly 
+			decreased the time it took to render. The cow took around 68 seconds to render without BVH but with BVH Acceleration, it was rendered in 0.23 seconds. 
+			The numbers were similar for the other two renders with an over 100 times improvement in speed. The intersections per ray counts were pretty low 
+			for BVH sturctures at around 6 or 7 intersections per ray. While without BVH it was in the thousands depending on the model. Thus, 
+			we see that BVH greatly enhances the speed of ray tracing.
+		</p>
+		<hr>
+		<h1> Part 3</h1>
+		<p>
+			In this part I implemented two direct lighting functions. The first one was the uniform hemisphere sampler. 
+			this was a monte-carlo estimation of the integral of the radiant exitance at a point in a exit direction by 
+			integrating over the incoming light rays on a hemisphere. For each incoming radiance sample, I multipled it by the bsdf between the incoming ray and exit direction.
+			I then divided by 2PI which is the recriopocal of the probability of the incoming ray being chosen. 2PI is the surface area of the hemisphere. 
+			Finally I divided the sum of all the samples by the number of samples to obtain the average.
+
+			What I did for the 2nd implementation which involved importance sampling was pretty similar. Instead of multiplying by 2PI, 
+			I divided by the pdf which I was given from the sampling function I used. The rest of the steps are the same. 
+			One implementaiton detail worth noting is that to sample from a light source, I needed to check whether the light source was visible from 
+			my the current position or not. This involved casting a shadow ray and checking for any obstacles. To prevent self intersections for the ray starting on a surface, 
+			I made min_t = EPS_F and to avoid collision with the surface of the light, I subtracted EPS_F from distToLight and set it to max_t.
+		</p>
+		<p> Here are some images rendered using both implementations of direct lighting functions </p>
+		<table>
+			<tr>
+				<th> Uniform Hemisphere Sampling </th>
+				<th> Importance Sampling</th>
+			</tr>
+			<tr>
+				<th> <img src=".\img\part3\bunny_H_64_4_5.PNG"> </th>
+				<th> <img src=".\img\part3\bunny_64_4_5.PNG"> </th>
+			</tr>
+			<tr>
+				<th> <img src=".\img\part3\spheres_H_32_4_5.PNG"> </th>
+				<th> <img src=".\img\part3\spheres_32_4_5.PNG"> </th>
+			</tr>
+		</table>
+		<p> Elaborating on importance sampling more, </p>
+		<p> 
+			Here is one scene in great detail to better compare the noise levels in soft shadows of importance sampling
+			when rendering with 1, 4, 16, and 64 light rays and 1 sample per pixel
+		</p>
+		<table>
+			<tr> 
+				<th> 1 </th>
+				<th> 4 </th>
+			</tr>
+			<tr> 
+				<th> <img src=".\img\part3\bunny_1_1.PNG"> </th>
+				<th> <img src=".\img\part3\bunny_1_4.PNG"> </th>
+			</tr>
+			<tr> 
+				<th> 16 </th>
+				<th> 64 </th>
+			</tr>
+			<tr> 
+				<th> <img src=".\img\part3\bunny_1_16.PNG"> </th>
+				<th> <img src=".\img\part3\bunny_1_64.PNG"> </th>
+			</tr>
+		</table>
+		
+		<p> Comparing uniform hemisphere and importance sampling, 
+			it is evident that importance sampling proves itself to be much better at reducing noise for implementing direct lighting.
+			Hemisphere sampling has a lot of noise because most directions sampled do not point to a light source. 
+			Thus, the light value of the pixel has a lot of variance and its value depdends on whether it happens to hit a light source during the sample. 
+			This is especially true for small light sources like point light sources which have a basically 0 chance to be hit by a ray.
+
+			Importance sampling on the other hand resolves these issues by guaranteeing that any light sources that are visible will be sampled. 
+			It also is more efficient in that more of the samples cast actually contribute to the lighting sum calculation. 
+		</p>
+		<hr>
+		<h1> Part 4 </h1>
+		<p>
+			My implentation of the indirect lighting function involved calculating light contributions from light paths with multiple bounces.
+			I implemnted this recursively by casting a ray into the scene, then intersecting a point, I will call this p.
+			Then adding the one-bounce direct lighting contribution from p. 
+			And then recursing by casting another ray from p in a random direction to p'. 
+			The light returned from point p will then be depdent on the one-bounce contribution but also the contributon from the direction of p' bouncing off p. 
+			This recursion would be infinite but it is stopped randomly with russain roulette, where at any stage of the recursion, there is a probability of 1-cdf 
+			that the recursion stops and we just return the one-bounce contribution. 
+			To ensure that the expected value of the monte-carlo summations remain the same we have to divide the lighting sample by cdf when we get a result back from a recursion.
+		</p>
+		<p> Here are some images rendered with global (direct and indirect) illumination using 1024 samples per pixel </p>
+		<table>
+			<tr> 
+				<th><img src=".\img\part4\spheres_32_4_5.PNG"> </th>
+				<th><img src=".\img\part4\CBlucy_16_4_3.PNG"> </th>
+				<p> The render above was only done with 16 pixels and 3 rays. but it does show tha global illuminaiton is in effect</p>
+			</tr>
+		</table>
+		<p>
+			Here is one scene where we only used direct illumination and only indirect illumination. 
+			Direct here refers to 0-bounce and 1-bounce. And indirect refers to 2 or more bounces.
+		</p>
+		<table>
+			<tr>
+				<th><img src=".\img\part4\spheres_1024_direct_lighting.PNG"> </th>
+				<th><img src=".\img\part4\spheres_1024_indirect_lighting.PNG"> </th>
+			</tr>
+		</table>
+		<p> Just for fun, here is the same scene with full illumination </p>
+		<img src=".\img\part4\spheres_1024_full.PNG">
+		<p> As requested by the rubric, here is CBbunny.dae with rendered views with max_ray_depths of 0,1,2,3, and 100 using 1024 samples per pixel </p>
+		<p> My laptop is overheating right now... </p>
+		<table>
+			<tr>
+				<th> max_depth = 0 </th>
+				<th> max_depth = 1 </th>
+				
+			</tr>
+			<tr>
+				<th> <img src=".\img\part4\CBbunny_1024_16_0.PNG"> </th>
+				<th> <img src=".\img\part4\CBbunny_1024_16_1.PNG"> </th>
+			</tr>
+			<tr>
+				<th> max_depth = 2 </th>
+				<th> max_depth = 3 </th>
+			</tr>
+			<tr>
+				<th> <img src=".\img\part4\CBbunny_1024_16_2.PNG"> </th>
+				<th> <img src=".\img\part4\CBbunny_1024_16_3.PNG"> </th>
+			</tr>
+			<tr>
+				<th> max_depth = 100 </th>
+			</tr>
+			<tr>
+				<th> <img src=".\img\part4\CBbunny_1024_16_100.PNG"> </th>
+			</tr>
+		</table>
+		<p>
+			Again, at the rubric's request, here is one scene with various sample-per-pixel rates including 
+			1, 2, 4, 8, 16, 64, and 1024 using at least 4 light rays.
+		</p>
+		<table>
+			<tr>
+				<th> samples = 1 </th>
+				<th> samples = 2 </th>
+				
+			</tr>
+			<tr>
+				<th> <img src=".\img\part4\dragon_1_4_5.PNG"> </th>
+				<th> <img src=".\img\part4\dragon_2_4_5.PNG"> </th>
+			</tr>
+			<tr>
+				<th> samples = 4 </th>
+				<th> samples = 8 </th>
+			</tr>
+			<tr>
+				<th> <img src=".\img\part4\dragon_4_4_5.PNG"> </th>
+				<th> <img src=".\img\part4\dragon_8_4_5.PNG"> </th>
+			</tr>
+			<tr>
+				<th> samples = 16 </th>
+				<th> samples = 32 </th>
+			</tr>
+			<tr>
+				<th> <img src=".\img\part4\dragon_16_4_5.PNG"> </th>
+				<th> <img src=".\img\part4\dragon_32_4_5.PNG"> </th>
+			</tr>
+			<tr>
+				<th> samples = 64 </th>
+				<th> samples = 1024 </th>
+			</tr>
+			<tr>
+				<th> <img src=".\img\part4\dragon_64_4_5.PNG"> </th>
+				<th> <img src=".\img\part4\dragon_1024_4_5.PNG"> </th>
+			</tr>
+		</table>
+		<hr>
+		<h1> Part 5 </h1>
+		<p> 
+			Adaptive sampling is sampling more from more complicated regions of the scene and sampling less from less complicated regions of the scene.
+			It is focusing computation power on parts of the image that need it. Some pixels converge very fast because their is not a lot of geometry or complicated lighting while other pixles 
+			are very chaotic and have widely different sample values dependent on what direction the random rays bounced off in. 
+			My implementation of adaptive sampling kept track of the running mean and variance of the sample points.
+			Then after every numSamplesPerBatch steps, I construct a confidence interval. If the confidence interval is sufficently small, then I stop taking samples. Otherwise I continue taking samples until 
+			I either converge or hit the sample limit I specified.
+		</p>
+		<p> Here are two scenes with at least 2048 samples per pixel that show how effectively the adaptive sampling is. </p>
+		<p> Notice how noise free the final results are and how different parts of the image required drastically different numbers of samples </p>
+		<p> The images were constructed with 1 sample per light and 5 for max ray depth </p>
+		<table>
+			<tr>
+				<th> <img src=".\img\part5\bunny.PNG"> </th>
+				<th> <img src=".\img\part5\bunny_rate.PNG"> </th>
+			</tr>
+			<tr>
+				<th> <img src=".\img\part5\dragon_conv.PNG"> </th>
+				<th> <img src=".\img\part5\dragon_conv_rate.PNG"> </th>
+
+			</tr>
+		</table>
+		<h1> <a href="https://cal-cs184-student.github.io/project-webpages-sp23-eric-li-2/"> Github pages link </a></h1>
 	</body>
 </html>
