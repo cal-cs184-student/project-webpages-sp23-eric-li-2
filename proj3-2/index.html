@@ -1,7 +1,227 @@
-<html>
-	<head>
-	</head>
-	<body>
-		Project 3-2 here
-	</body>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>  
+    div.padded {  
+      padding-top: 0px;  
+      padding-right: 100px;  
+      padding-bottom: 0.25in;  
+      padding-left: 100px;  
+    }  
+  </style> 
+<title> Eric Li  |  CS 184</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="style.css" media="screen" />
+</head>
+<body>
+<br />
+<h1 align="middle">Assignment 3-2: Additional Features to PathTracer</h1>
+    <h2 align="middle"> Eric Li </h2>
+    <h2 align="middle"><a href="https://cal-cs184-student.github.io/project-webpages-sp23-eric-li-2/"> Github pages link </a></h2>
+
+    <div class="padded">
+
+        
+        * NOTE: For this project, you will choose TWO out of the four given parts to complete. One of those parts must be Part 1 or Part 2. In other words, you can choose any combination of two parts except the pair (Part 3, Part 4).
+		
+		<h3> Overview </h3>
+		<p>
+			For this project, I completed parts 1 and 2 (Mirrors/glass and microfacets).
+			The code for these parts was fairly short since it built on project 3-1 and added a few new bsdf functions.
+			For implementing mirrors, I implemented reflecting bsdfs by removing the random sampling used in lambertian diffuse and replacing it with 
+			a determnistic vector in the bounce direction. 
+			For refractions, I did a similar thing by using snell's law.
+			for glass, I used both reflection and refraction and randomly sampled whether the light beam reflected or refracted using the fresnel coefficient which 
+			told me the ratio of energy for light bouncing versus refracting for air to dielectric interfaces. 
+
+			<br>
+			For part two, I implemented microfacets which is a model of surfaces as a bunch of randomly oriented specular facets.
+			This involved a lot of math to model the distribution of normal vectors on the surface, a shadow masking term, and again the fresnel coefficient.
+			The fresnel coefficient for this part was more complicated as the fresnel coefficient for conductors is different than dielectrics and is a function of wavelength.
+			Finally, I also implemented importance sampling to help with speeding up the microfacet model. 
+			This involved sampling from a distribution of random vectors that more closely resembled the distribution given by the microfacet model.
+			The default hemisphere model given worked but converged much slower compared to the importance sample model I implemented.
+			The function I used to sample with was called the Beckman NDF function.
+		</p>
+        <h3 align="middle">Part 1. Mirror and Glass Materials</h3>
+
+        <p><b>
+            Show a sequence of six images of scene `CBspheres.dae` rendered with `max_ray_depth` set to 0, 1, 2, 3, 4, 5, and 100. The other settings should be at least 64 samples per pixel and 4 samples per light. Make sure to include all screenshots.
+        </b></p>
+        <p>
+            <table>
+			<tr>
+				<th> max_depth = 0 </th>
+				<th> max_depth = 1 </th>
+				
+			</tr>
+			<tr>
+				<th> <img src=".\img\part1\CBspheres_64_4_0.png"> </th>
+				<th> <img src=".\img\part1\CBspheres_64_4_1.png"> </th>
+			</tr>
+			<tr>
+				<th> max_depth = 2 </th>
+				<th> max_depth = 3 </th>
+			</tr>
+			<tr>
+				<th> <img src=".\img\part1\CBspheres_64_4_2.png"> </th>
+				<th> <img src=".\img\part1\CBspheres_64_4_3.png"> </th>
+			</tr>
+			<tr>
+				<th> max_depth = 4 </th>
+				<th> max_depth = 5 </th>
+			</tr>
+			<tr>
+				<th> <img src=".\img\part1\CBspheres_64_4_4.png"> </th>
+				<th> <img src=".\img\part1\CBspheres_64_4_5.png"> </th>
+			</tr>
+			<tr>
+				<th> max_depth = 100 </th>
+			</tr>
+			<tr>
+				<th> <img src=".\img\part1\CBspheres_64_4_100.png"> </th>
+			</tr>
+			</table>
+        </p>
+        <br>
+        <p><b>
+            Point out the new multibounce effects that appear in each image. 
+        </b></p>
+        <p>
+            For zero bounce, we only see light directly from the ceiling light.
+			<br>
+			For one bounce, we see light also from one bounce which includes the walls and highlights on the two spheres.
+			<br>
+			For two bounces, we begin to have some global illumination and can see the ceiling. 
+			The shadows of the balls become lighter. 
+			And we can see reflections of the scene on the mirror ball. 
+			Note that with only two bounces, the scene in the mirror ball appears like the scene from one bounce since one of the bounces was consumed by the mirror. 
+			The ceiling and glass ball is still dark inside the mirror.
+			<br>
+			For three bounces, the glass ball becomes transparent. The three bounces required for this are bouncing off a wall, entering the glass ball, and exiting the ball. 
+			Note, that the glass ball inside the mirror is still black.
+			We also see the light focusing in the shadow of the glass ball and see a bright spot.
+			<br>
+			For four bounces, the glass ball inside the mirror becomes transparent. We also get a second bright spot on the blue right wall. 
+			This is from light being bounced off the mirror ball focusing through the glass ball onto the blue wall.
+			<br>
+			For five bounces, there is nothing new that is notable other than more detail in the mirror ball.
+			<br>
+			For 100 bounces, nothing really chnages other than the scene is slightly brighter.
+			Also note that the scenes get progressively more noisy as we increase the depth due to the estimation of higher dimensional integrals. 
+        </p>
+        <br>
+        <p><b>
+            Explain how these bounce numbers relate to the particular effects that appear. Make sure to include all screenshots.
+        </b></p>
+        <p>
+            Zero bounce is the light directly from the lamp. No bounces are required for this to appear in the render.
+			<br>
+			For one bounce, we see light from the walls and highlights on the spheres.
+			This is explained by the light bouncing off once on the wall and then onto the camera.
+			The balls' highlights appear because at a specific region on the sphere, the normals just happen to bounce the light from the ceiling directly into the camera.
+			<br>
+			For two bounces, we can see the ceiling, lighting in the shadows of the balls, and reflection on the mirror ball.
+			The light from the shadow of the spheres is explained by light bouncing off the wall, then into the shadow of the ball, then into the camera.
+			The light from the ceiling is explained by light bouncing off the spheres and floor, then onto the ceiling, then into the camera.
+			The light from the mirror is from light bouncing off the scene, then into the mirror, then into the camera.
+			<br>
+			For three bounces, the glass ball becomes transparent. 
+			The three bounces required for this are bouncing off a wall, entering the glass ball, and exiting the ball. 
+			Note, that the glass ball inside the mirror is still black.
+			We also see the light focusing in the shadow of the glass ball and see a bright spot.
+			This is explained by light entering the sphere, exiting the sphere, then bouncing off the floor, then into the camera.
+			<br>
+			For four bounces, the glass ball inside the mirror becomes transparent. We also get a second bright spot on the blue right wall. 
+			This is from light being bounced off the mirror ball focusing through the glass ball onto the blue wall.
+			<br>
+			For five bounces, there is nothing new that is notable other than more detail in the mirror ball.
+			<br>
+			For 100 bounces, nothing really chnages other than the scene is slightly brighter.
+			Also note that the scenes get progressively more noisy as we increase the depth due to the estimation of higher dimensional integrals. 
+        </p>
+		<h3> Some implemntation details </h3>
+		<p> For refractions, it is important to check whether the light is entering or exiting the medium. 
+			This means I had to pay attention to whether I was using ior (index of refraction) or 1 / ior (the recripocal) 
+			when I needed the ratio of the indices of refraction.
+		</p>
+        <br>
+        
+
+
+        <h3 align="middle">Part 2. Microfacet Material</h3>
+        <p><b>
+            Show a screenshot sequence of 4 images of scene `CBdragon_microfacet_au.dae` rendered with $\alpha$ set to 0.005, 0.05, 0.25 and 0.5. The other settings should be at least 128 samples per pixel and 1 samples per light. The number of bounces should be at least 5. Describe the differences between different images. Note that, to change the $\alpha$, just open the .dae file and search for `microfacet`.
+        </b></p>
+        <p>
+            <table>
+				<tr>
+					<th> alpha = 0.005 </th>
+					<th> alpha = 0.05 </th>
+					
+				</tr>
+				<tr>
+					<th> <img src=".\img\part2\CBdragon_microfacet_au_256_4_7_alpha_005.png"> </th>
+					<th> <img src=".\img\part2\CBdragon_microfacet_au_256_4_7_alpha_05.png"> </th>
+				</tr>
+				<tr>
+					<th> alpha = 0.25 </th>
+					<th> alpha = 0.5 </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part2\CBdragon_microfacet_au_256_4_7_alpha_25.png"> </th>
+					<th> <img src=".\img\part2\CBdragon_microfacet_au_256_4_7_alpha_5.png"> </th>
+				</tr>
+				</table>
+        </p>
+		<p>
+			The difference between these images is that the dragons with lower alpha values are shinier and more specular.
+			The have brighter bright spots and darker dark spots due to reflected light being more focused. 
+			This light is either more focused on a spot away from the camera or more focused towards the camera, which explains the higher contrast.
+		</p>
+        <br>
+        <p><b>
+            Show two images of scene `CBbunny_microfacet_cu.dae` rendered using cosine hemisphere sampling (default) and your importance sampling. The sampling rate should be fixed at 64 samples per pixel and 1 samples per light. The number of bounces should be at least 5. Briefly discuss their difference.
+        </b></p>
+        <p>
+			<table>
+			<tr>
+				<th> Hemisphere Sampling </th>
+				<th> Importance Sampling </th>
+			</tr>
+            <tr>
+				<th> <img src=".\img\part2\CBbunny_microfacet_cu_64_1_7_hemisphere_sample.png"> </th>
+				<th> <img src=".\img\part2\CBbunny_microfacet_cu_64_1_7_importance_sample.png"> </th>
+			</tr>
+			</table>
+			Importance sampling converged on the correct image much faster. 
+			This is because most of the light rays cast by hemisphere sampling have very low contribution to the overall exit radiance. 
+			This is because for specular materials, the light is focused around the reflection directions.
+			This causes the hemisphere sampling image to appear dark since most of the light rays cast don't contribute much.
+			The hemisphere sampling if given enough samples would converge to the same image as importance sampling but it will take significantly longer.
+        </p>
+        <br>
+        <p><b>
+            Show at least one image with some other conductor material, replacing `eta` and `k`. Note that you should look up values for real data rather than modifying them arbitrarily. Tell us what kind of material your parameters correspond to. 
+        </b></p>
+        <p>
+            <table>
+				<tr>
+					<th> Silver <br> Eta = [0.26748 0.25070 0.23302] k = [4.1281 3.5568 2.7968]</th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part2\CBdragon_microfacet_256_4_7_silver.png"> </th>
+				</tr>
+				</table>
+        </p>
+        <br>
+		<h3> Implementation Details </h3>
+        <p> Note that as alpha decreases, the images becomes more noisy and less stable. I assume this is due to floating point issues.
+			As there are alpha squared terms in the denominators of a lot of the expressions used.
+			another implementation detail is that I needed to discard any invalid light rays. 
+			any rays with a z component less than 0, meaning the light ray is pointing inside the object, is invalid since we are assuming this object isn't transparent.
+			I just simply returned a zero vector instead.
+		</p>
+    </div>
+</body>
 </html>
