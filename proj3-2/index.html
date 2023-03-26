@@ -143,7 +143,8 @@
 		<h3> Some implemntation details </h3>
 		<p> For refractions, it is important to check whether the light is entering or exiting the medium. 
 			This means I had to pay attention to whether I was using ior (index of refraction) or 1 / ior (the recripocal) 
-			when I needed the ratio of the indices of refraction.
+			when I needed the ratio of the indices of refraction. Another thing to take note of was a case of total internal reflection. 
+			I returned a boolean to indicate this. For the glass bsdf, if total internal reflection occurred, I defaulted to only counting the light from reflection.
 		</p>
         <br>
         
