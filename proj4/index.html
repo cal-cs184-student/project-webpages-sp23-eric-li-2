@@ -1,7 +1,550 @@
-<html>
-	<head>
-	</head>
-	<body>
-		Project 4 here
-	</body>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<style>  
+    div.padded {  
+      padding-top: 0px;  
+      padding-right: 100px;  
+      padding-bottom: 0.25in;  
+      padding-left: 100px;  
+    }  
+	img {
+		width: 100%;
+		height: 100%;
+	}
+  </style> 
+<title> Eric Li  |  CS 184</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rel="stylesheet" type="text/css" href="style.css" media="screen" />
+</head>
+<body>
+<br />
+<h1 align="middle">Assignment 4: Cloth Simulator</h1>
+    <h2 align="middle"> Eric Li </h2>
+    <h2 align="middle"><a href="https://cal-cs184-student.github.io/project-webpages-sp23-eric-li-2/"> Github pages link </a></h2>
+
+    <div class="padded">
+
+		<h3> Overview </h3>
+		<p>
+			For this project, I modeled and simulated cloth using a mass and spring model. 
+			The entire project revolved around the intricacies of this task which included 
+			<br> - making sure the numerical integration remained stable with verlet integration
+			<br> - handling collisions with other objects properly (prevent clipping through other objects)
+			<br> - handling self collisions
+			<br> - rendering the cloth efficentiy with shaders written in GLSL
+			Some special notes about Verlet integration is that it using dampening to keep the simulation stable.
+			This causes the simulation to seem more sluggish than natural but it still gives pretty good results.
+			I also used the constraints that springs can't be more than 10% of the rest length and manually moved the point masses closer together if they were too far apart.
+			Another note is that the self-collisions of the cloth particles were handled efficiently using a hashmap that 
+			mapped points in 3d to rectangular boxes and then only enforcing constraints of particles within the box.
+
+		</p>
+        <h3 align="middle">Part 1. Modeling Masses and Springs </h3>
+
+        <p><b>
+            Take some screenshots of scene/pinned2.json from a viewing angle where you can clearly see the cloth wireframe to show the structure of your point masses and springs.
+        </b></p>
+        <p>
+            <table>
+			<tr>
+				<th> <img src=".\img\part1\close_up.png"> </th>
+				<th> <img src=".\img\part1\overall_view.png"> </th>
+			</tr>
+			</table>
+        </p>
+        <br>
+        <p><b>
+            Show us what the wireframe looks like (1) without any shearing constraints, (2) with only shearing constraints, and (3) with all constraints.
+        </b></p>
+        <p>
+			<table>
+				<tr>
+					<th> Without shearing constraints </th>
+					<th> Shearing constraints only </th>
+					
+				</tr>
+				<tr>
+					<th> <img src=".\img\part1\no_shearing.png"> </th>
+					<th> <img src=".\img\part1\only_shearing.png"> </th>
+				</tr>
+				<tr>
+					<th> all constraints </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part1\all_constraints.png"> </th>
+				</tr>
+				</table>
+		</p>
+        <br>
+        
+
+
+        <h3 align="middle">Part 2. Simulation via Numerical Integration </h3>
+        <p><b>
+            Describe the effects of changing the spring constant ks; how does the cloth behave from start to rest with a very low ks? A high ks?
+        </b></p>
+        <p>
+			For a low ks, the animation from start to end follows this pattern.
+			The cloth falls, then suddenly jerks due to the pegs and the force travels along the cloth
+			causing the cloth to not fall freely anymore. Then the cloth slowly and gracefully comes to rest.
+			For low ks, there is a very large and smooth sag with no wrinkles.
+
+			For high ks, the animation from start to finish follows the same pattern except 
+			the cloth becomes more taut meaning less wrinkles and less sag.
+			During the fall, the cloth appears more bouncy and bounces up and down a bit before settling.
+			When ks is even larger, the cloth appears scrunched up as all the internal vertices 
+			pull on eachother and the two pinned vertices at the corners. 
+			When k is too large, the cloth starts shaking and spasming. 
+			The spasms start from the pinned vertices and propogate throughout the cloth.
+			Increasing k even further causes the point masses to explode and fly off screen.
+            <table>
+				<tr>
+					<th> low Ks </th>
+					<th> High Ks </th>
+					
+				</tr>
+				<tr>
+					<th> <img src=".\img\part2\k_low.png"> </th>
+					<th> <img src=".\img\part2\k_mid.png"> </th>
+				</tr>
+				<tr>
+					<th> Very high Ks </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part2\k_high.png"> </th>
+				</tr>
+			</table>
+        </p>
+        <br>
+        <p><b>
+			What about for density?
+        </b></p>
+        <p>
+			At low density, the cloth moves more as low mass means high acceleration. 
+			But it still settles relativley quickly.
+			A higher density causes the cloth to be heavier and sag more. It also causes less wrinkles.
+			<table>
+			<tr>
+				<th> low density </th>
+				<th> high density </th>
+			</tr>
+            <tr>
+				<th> <img src=".\img\part2\density_low.png"> </th>
+				<th> <img src=".\img\part2\density_high.png"> </th>
+			</tr>
+			</table>
+        </p>
+        <br>
+        <p><b>
+            What about for damping?
+        </b></p>
+        <p>
+			For low damping values, the cloth after it falls swings for a while. 
+			The energy isn't dissipated so it swings back and forth. 
+			The cloth behaves like a very light cloth in the wind.
+
+			A high damping value causes the cloth to move slower.
+			The cloth falls really slowly, as if it is moving through a very dense fluid.
+			The sudden movments also die out extremely quickly.
+
+			<br>
+			Here is a sequence of images showing the low damping cloth swining
+            <table>
+				<tr>
+					<th> Frame 0 </th>
+					<th> Frame 1 </th>
+					
+				</tr>
+				<tr>
+					<th> <img src=".\img\part2\damp_low_0.png"> </th>
+					<th> <img src=".\img\part2\damp_low_1.png"> </th>
+				</tr>
+				<tr>
+					<th> Frame 2 </th>
+					<th> Frame 3 </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part2\damp_low_2.png"> </th>
+					<th> <img src=".\img\part2\damp_low_3.png"> </th>
+				</tr>
+			</table>
+        </p>
+        <br>
+		<p><b>
+            Show us a screenshot of your shaded cloth from scene/pinned4.json in its final resting state! If you choose to use different parameters than the default ones, please list them.
+        </b></p>
+		<p>
+			<table>
+				<tr>
+					<th> <img src=".\img\part2\pin4.png"> </th>
+					<th> <img src=".\img\part2\pin4_2.png"> </th>
+				</tr>
+			</table>
+		</p>
+
+		</p>
+        <h3 align="middle">Part 1. Modeling Masses and Springs </h3>
+
+        <p><b>
+            Take some screenshots of scene/pinned2.json from a viewing angle where you can clearly see the cloth wireframe to show the structure of your point masses and springs.
+        </b></p>
+        <p>
+            <table>
+			<tr>
+				<th> <img src=".\img\part1\close_up.png"> </th>
+				<th> <img src=".\img\part1\overall_view.png"> </th>
+			</tr>
+			</table>
+        </p>
+        <br>
+        <p><b>
+            Show us what the wireframe looks like (1) without any shearing constraints, (2) with only shearing constraints, and (3) with all constraints.
+        </b></p>
+        <p>
+			<table>
+				<tr>
+					<th> Without shearing constraints </th>
+					<th> Shearing constraints only </th>
+					
+				</tr>
+				<tr>
+					<th> <img src=".\img\part1\no_shearing.png"> </th>
+					<th> <img src=".\img\part1\only_shearing.png"> </th>
+				</tr>
+				<tr>
+					<th> all constraints </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part1\all_constraints.png"> </th>
+				</tr>
+				</table>
+		</p>
+        <br>
+        
+
+
+        <h3 align="middle">Part 2. Simulation via Numerical Integration </h3>
+        <p><b>
+            Describe the effects of changing the spring constant ks; how does the cloth behave from start to rest with a very low ks? A high ks?
+        </b></p>
+        <p>
+			For a low ks, the animation from start to end follows this pattern.
+			The cloth falls, then suddenly jerks due to the pegs and the force travels along the cloth
+			causing the cloth to not fall freely anymore. Then the cloth slowly and gracefully comes to rest.
+			For low ks, there is a very large and smooth sag with no wrinkles.
+
+			For high ks, the animation from start to finish follows the same pattern except 
+			the cloth becomes more taut meaning less wrinkles and less sag.
+			During the fall, the cloth appears more bouncy and bounces up and down a bit before settling.
+			When ks is even larger, the cloth appears scrunched up as all the internal vertices 
+			pull on eachother and the two pinned vertices at the corners. 
+			When k is too large, the cloth starts shaking and spasming. 
+			The spasms start from the pinned vertices and propogate throughout the cloth.
+			Increasing k even further causes the point masses to explode and fly off screen.
+            <table>
+				<tr>
+					<th> low Ks </th>
+					<th> High Ks </th>
+					
+				</tr>
+				<tr>
+					<th> <img src=".\img\part2\k_low.png"> </th>
+					<th> <img src=".\img\part2\k_mid.png"> </th>
+				</tr>
+				<tr>
+					<th> Very high Ks </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part2\k_high.png"> </th>
+				</tr>
+			</table>
+        </p>
+        <br>
+        <p><b>
+			What about for density?
+        </b></p>
+        <p>
+			At low density, the cloth moves more as low mass means high acceleration. 
+			But it still settles relativley quickly.
+			A higher density causes the cloth to be heavier and sag more. It also causes less wrinkles.
+			<table>
+			<tr>
+				<th> low density </th>
+				<th> high density </th>
+			</tr>
+            <tr>
+				<th> <img src=".\img\part2\density_low.png"> </th>
+				<th> <img src=".\img\part2\density_high.png"> </th>
+			</tr>
+			</table>
+        </p>
+        <br>
+        <p><b>
+            What about for damping?
+        </b></p>
+        <p>
+			For low damping values, the cloth after it falls swings for a while. 
+			The energy isn't dissipated so it swings back and forth. 
+			The cloth behaves like a very light cloth in the wind.
+
+			A high damping value causes the cloth to move slower.
+			The cloth falls really slowly, as if it is moving through a very dense fluid.
+			The sudden movments also die out extremely quickly.
+
+			<br>
+			Here is a sequence of images showing the low damping cloth swining
+            <table>
+				<tr>
+					<th> Frame 0 </th>
+					<th> Frame 1 </th>
+					
+				</tr>
+				<tr>
+					<th> <img src=".\img\part2\damp_low_0.png"> </th>
+					<th> <img src=".\img\part2\damp_low_1.png"> </th>
+				</tr>
+				<tr>
+					<th> Frame 2 </th>
+					<th> Frame 3 </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part2\damp_low_2.png"> </th>
+					<th> <img src=".\img\part2\damp_low_3.png"> </th>
+				</tr>
+			</table>
+        </p>
+        <br>
+		<p><b>
+            Show us a screenshot of your shaded cloth from scene/pinned4.json in its final resting state! If you choose to use different parameters than the default ones, please list them.
+        </b></p>
+		<p>
+			<table>
+				<tr>
+					<th> <img src=".\img\part2\pin4.png"> </th>
+					<th> <img src=".\img\part2\pin4_2.png"> </th>
+				</tr>
+			</table>
+		</p>
+
+
+
+		<h3 align="middle">Part 3. Handling Collisions with Other Objects </h3>
+        <p><b>
+            Show us screenshots of your shaded cloth from scene/sphere.json in its final resting state on the sphere using the default ks = 5000 as well as with ks = 500 and ks = 50000. Describe the differences in the results.
+        </b></p>
+        <p>
+			
+            <table>
+				<tr>
+					<th> default Ks = 5000 </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part3\cloth_k5000.png"> </th>
+				</tr>
+				<tr>
+					<th> Ks = 500 </th>
+					<th> Ks = 50000 </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part3\cloth_k500.png"> </th>
+					<th> <img src=".\img\part3\cloth_k50000.png"> </th>
+				</tr>
+			</table>
+			The lower the Ks value, the thinner and more flexible the cloth. 
+			The higher the Ks value, the thicker and more rigid the cloth.
+			For example, comparing Ks=500 and Ks=50000, we see that the Ks=500 cloth has less wrinkles. 
+			The Ks=500 cloth deforms more easily and warps smoothly around the ball. 
+			On the other hand, the Ks=50000 cloth has many folds and does not wrap smoothly around the ball. 
+			This is due to the bending forces. 
+			The cloth also does not hang as low as the Ks=500 cloth as the structural and shearing forces are stronger.
+        </p>
+        <br>
+        <p><b>
+			Show us a screenshot of your shaded cloth lying peacefully at rest on the plane. If you haven't by now, feel free to express your colorful creativity with the cloth! (You will need to complete the shaders portion first to show custom colors.)
+        </b></p>
+        <p>
+			<img src=".\img\part3\plane.png">
+        </p>
+        <br>
+        
+
+		<h3 align="middle">Part 4. Handling Collisions with Other Objects </h3>
+        <p><b>
+            Show us at least 3 screenshots that document how your cloth falls and folds on itself, starting with an early, initial self-collision and ending with the cloth at a more restful state (even if it is still slightly bouncy on the ground).
+        </b></p>
+        <p>
+            <table>
+				<tr>
+					<th> <img src=".\img\part4\initial.png"> </th>
+					<th> <img src=".\img\part4\early.png"> </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part4\mid.png"> </th>
+					<th> <img src=".\img\part4\late.png"> </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part4\end.png"> </th>
+				</tr>
+			</table>
+        </p>
+        <br>
+        <p><b>
+			Vary the density as well as ks and describe with words and screenshots how they affect the behavior of the cloth as it falls on itself.
+        </b></p>
+        <p>
+			The lower the ks, the more flexible and wrinkly the cloth appears. 
+			The lower the ks, the less folds there are in the cloth.
+			Regarding the density, the higher the density, the more flexible and wrinkly the cloth.
+
+			Varying the ks:
+			<table>
+				<tr>
+					<th> ks=100 </th>
+					<th> ks=5000 </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part4\k100.png"> </th>
+					<th> <img src=".\img\part4\k5000.png"> </th>
+				</tr>
+				<tr>
+					<th> ks=100000 </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part4\k100000.png"> </th>
+			</table>
+
+			Varying the Density:
+			<table>
+				<tr>
+					<th> density = 1 </th>
+					<th> density = 150 </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part4\k5000d1.png"> </th>
+					<th> <img src=".\img\part4\k5000d150.png"> </th>
+				</tr>
+				<tr>
+					<th> density = 15000 </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part4\k5000d15000.png"> </th>
+			</table>
+        </p>
+        <br>
+
+		<h3 align="middle">Part 5. Shaders </h3>
+        <p><b>
+            Explain in your own words what is a shader program and how vertex and fragment shaders work together to create lighting and material effects.
+        </b></p>
+		<p>
+			A shader a program is a program that is run on the GPU. 
+			The program takes in inputs (for example vertex position and normal) and returns an output (ex. transformed vertex position and normal).
+			Shaders typically have a specific purpose and are modular meaning we can chain multiple shaders together.
+			The output of one shader is the input of another shader. These shaders are used for the graphics pipeline and provides a means of customization for graphics programmers.
+			Typically the graphics pipeline will include at least a vertex shader and a fragment shader. 
+			The vertex shader typically calcualtes attributes assosciated with vertex data. 
+			Material texture affects such as displacement mapping could be added at this stage to offset vertices according to a texture map. 
+			and the fragment shader takes in the vertex shader's output and is part of the rasterization step of the pipeline.
+			It will typically compute the final colors of pixels by interpolating the colors of vertices or calculating lighting from environment maps or material effects.
+			One example of changing the lighting is bump mapping where we shift the normals of a point according to a texture map to change the lighting.
+		</p>
+        <br>
+
+        <p><b>
+			Explain the Blinn-Phong shading model in your own words. Show a screenshot of your Blinn-Phong shader outputting only the ambient component, a screen shot only outputting the diffuse component, a screen shot only outputting the specular component, and one using the entire Blinn-Phong model.
+        </b></p>
+        <p>
+			The Blinn-Phong shading model is a model of how much light is reflected off of a surface in a certain direction.
+			It models light as coming from three sources, ambient light, diffuse light, and specular light. 
+			The ambient light is an approximation of global illumination and accounts for all light bouncing around the scene by approximating as a univeral glow all objects emit.
+			The diffuse component models light as being scattered uniformly in all directions after hitting a surface.
+			To model this, we first calculate how much light reaches the surface from a light source by accounting for the quadratic decrease in intensity with distance.
+			We also account for the angle at which the light strikes with a cosine term.
+			Then the light reflected in the view direction is just a scalar multiple of the light intensity striking the surface. 
+			The specular component models the surface as specular, meaning shiny and reflective. The intensity of light being reflected in the view direction 
+			is more complicated but utilizes a cosine to the p'th power dropoff. Meaning, the amount of light reflected drops off much more sharply when the view direction deviates from the 
+			ideal mirror reflection angle. 
+			<br>
+			Here are some screenshots of the Blinn-Phong model being used and the components of it:
+			<table>
+				<tr>
+					<th> All components </th>
+					<th> Ambient Only </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part5\phong_all.png"> </th>
+					<th> <img src=".\img\part5\phong_ambient.png"> </th>
+				</tr>
+				<tr>
+					<th> Diffuse Only </th>
+					<th> Specular Only </th>
+				</tr>
+					<th> <img src=".\img\part5\phong_diffuse.png"> </th>
+					<th> <img src=".\img\part5\phong_specular.png"> </th>
+				<tr>
+			</table>
+        </p>
+        <br>
+
+		<p><b>
+			Show a screenshot of your texture mapping shader using your own custom texture by modifying the textures in /textures/.
+        </b></p>
+        <img src=".\img\part5\texture_cat.png">
+		<br>
+
+		<p><b>
+			Show a screenshot of bump mapping on the cloth and on the sphere. 
+			Show a screenshot of displacement mapping on the sphere. 
+			Use the same texture for both renders. 
+			You can either provide your own texture or use one of the ones in the textures directory, 
+			BUT choose one that's not the default texture2.png. 
+			Compare the two approaches and resulting renders in your own words. 
+			Compare how your the two shaders react to the sphere by changing the sphere mesh's coarseness by using -o 16 -a 16 and -o 128 -a 128.
+        </b></p>
+
+		<p>
+			<table>
+				<tr>
+					<th> Bump mapping Sphere </th>
+					<th> Displacement mapping Sphere </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part5\bump.png"> </th>
+					<th> <img src=".\img\part5\displacement.png"> </th>
+				</tr>
+				<tr>
+					<th> Bump mapping Cloth </th>
+					<th> Displacement mapping Cloth </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part5\bump_cloth.png"> </th>
+					<th> <img src=".\img\part5\displacement_cloth.png"> </th>
+				</tr>
+				<tr>
+					<th> Bump mapping Cloth Wrapped on Sphere </th>
+					<th> Displacement mapping Cloth Wrapped on Sphere </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part5\bump_cloth_sphere.png"> </th>
+					<th> <img src=".\img\part5\displacement_cloth_sphere.png"> </th>
+				</tr>
+			</table>
+			Bump mapping changes the appearance of the object while displacement mapping changes both the look and shape of the object. 
+			Displacement mapping actually changes the shape of the object which can be seen in the cloth's uneveness.
+			<table>
+				<tr>
+					<th> Bump mapping with -o 16 -a 128 </th>
+					<th> Displacement mapping with -o 16 -a 128 </th>
+				</tr>
+				<tr>
+					<th> <img src=".\img\part5\bump128.png"> </th>
+					<th> <img src=".\img\part5\displacement128.png"> </th>
+				</tr>
+			</table>
+			When increasing the resolution, the bump mapping sphere's geometry just gets smoother but the appearance is the same.
+			The displacement mapping on the other hand gets more defined grooves for the brick seams. It also gets more noisy and spiky from the original texture having sharp changes in grayscale value.
+		</p>
+    </div>
+</body>
 </html>
